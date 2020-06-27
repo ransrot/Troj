@@ -82,9 +82,9 @@ class Chrome:
 
 			for url in urls:
 				if "http://" in url[1]:
-					result = url[1].split("http://")[1].replace("/", "")
+					result = url[1].split("http://")[1]
 				else:
-					result = url[1].split("https://")[1].replace("/", "")
+					result = url[1].split("https://")[1]
 
 				if not result in my_dict:
 					my_dict[url[0]] = result
