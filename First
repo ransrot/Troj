@@ -44,7 +44,7 @@ class Chrome:
 		pass
 
 	def database_connection(self, data_base, select_from, time=None, *args):
-		conn = sqlite3.connect(database)
+		conn = sqlite3.connect(data_base)
 		c = conn.cursor()
 
 		try:
